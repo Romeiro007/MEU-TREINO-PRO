@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meu Treino Pro</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#1f1f1f">
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js');
+        }
+    </script>
+
+    <style>
+        :root {
+            --bg: #121212;
+            --card: #1f1f1f;
+            --primary: #00c853;
+            --danger: #d50000;
+            --info: #2962ff;
+            --text: #ffffff;
+        }
+
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding-bottom: 50px;
+            text-align: center;
+        }
+
+        header {
+            background: var(--card);
+            padding: 20px;
+            font-size: 24px;
+            font-weight: bold;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+        }
+
+        .container {
+            padding: 20px;
+            max-width: 500px;
+            margin: auto;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        input, select {
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #333;
+            background: #252525;
+            color: white;
+            font-size: 16px;
+        }
+
+        button {
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            background: var(--primary);
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        button:active { opacity: 0.7; }
+        button.delete { background: var(--danger); padding: 5px 10px; font-size: 12px; }
+        button.edit { background: var(--info); padding: 5px 10px; font-size: 12px; }
+        button.clear-hist { background: #555; margin-top: 10px; }
+
+        .exercise {
+            background: var(--card);
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 10px;
+            text-align: left;
+            border-left: 4px solid var(--primary);
+        }
+
+        .exercise-info { margin-bottom: 10px; }
+        hr { border: 0; border-top: 1px solid #333; margin: 20px 0; }
+        
+        .history-item {
+            font-size: 14px;
+            color: #bbb;
+            background: #1a1a1a;
+            padding: 8px;
+            border-radius: 5px;
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+
+<header>💪 Minha Planilha de Treino</header>
+
+<div class="container">
+    <h2>Adicionar Exercício</h2>
+    <div class="form-group">
+        <select id="treino">
+            <option value="A">Treino A (Peito/Tríceps)</option>
+            <option value="B">Treino B (Costas/Bíceps)</option>
+            <option value="C">Treino C (Pernas/Ombro)</option>
+        </select>
+        <input id="nome" placeholder="Nome do exercício">
+        <input id="series" type="number" placeholder="Séries (Ex: 3)">
+        <input id="reps" placeholder="Repetições (Ex: 12-15)">
+        <button onclick="addExercise()">Adicionar à Lista</button>
+    </div>
+
+    <hr>
+
+    <div id="listas-treino">
+        <h3>🔥 Treino A</h3>
+        <div id="listaA"></div>
+        
+        <h3>⚡ Treino B</h3>
+        <div id="listaB"></div>
+        
+        <h3>🏋️ Treino C</h3>
+        <div id="listaC"></div>
+    </div>
+
+    <hr>
+
+    <h2>📅 Histórico de Treinos</h2>
+    <button onclick="registrarTreino()">Registrar Treino de Hoje</button>
+    <div id="historico" style="margin-top: 15px;"></div>
+    <button class="clear-hist" onclick="limparHistorico()">Limpar Histórico</button>
+</div>
+
+<script>
+    // Inicialização de dados
+    let treinos = JSON.parse(localStorage.getItem("treinos")) || { A:[], B:[], C:[] };
+    let historico = JSON.parse(localStorage.getItem("historico")) || [];
+
+    const salvar = () => localStorage.setItem("treinos", JSON.stringify(treinos));
+    const salvarHistorico = () => localStorage.setItem("historico", JSON.stringify(historico));
+
+    function addExercise() {
+        const treino = document.getElementById("treino").value;
+        const nome = document.getElementById("nome").value;
+        const series = document.getElementById("series").value;
+        const reps = document.getElementById("reps").value;
+
+        if(!nome || !series) {
+            alert("Preencha pelo menos o nome e as séries!");
+            return;
+        }
+
+        treinos[treino].push({ nome, series, reps });
+        
+        // Limpar inputs
+        document.getElementById("nome").value = "";
+        document.getElementById("series").value = "";
+        document.getElementById("reps").value = "";
+
+        salvar();
+        render();
+    }
+
+    function deleteExercise(treino, index) {
+        if(confirm("Deseja excluir este exercício?")) {
+            treinos[treino].splice(index, 1);
+            salvar();
+            render();
+        }
+    }
+
+    function editExercise(treino, index) {
+        let ex = treinos[treino][index];
+        let novoNome = prompt("Novo nome:", ex.nome);
+        if (novoNome) {
+            ex.nome = novoNome;
+            salvar();
+            render();
+        }
+    }
+
+    function render() {
+        ["A", "B", "C"].forEach(t => {
+            const lista = document.getElementById("lista" + t);
+            lista.innerHTML = treinos[t].length === 0 ? '<p style="color:#666; font-size:13px;">Vazio</p>' : "";
+            
+            treinos[t].forEach((ex, i) => {
+                lista.innerHTML += `
+                    <div class="exercise">
+                        <div class="exercise-info">
+                            <strong>${ex.nome}</strong><br>
+                            <small>${ex.series} séries x ${ex.reps} reps</small>
+                        </div>
+                        <button class="edit" onclick="editExercise('${t}',${i})">Editar</button>
+                        <button class="delete" onclick="deleteExercise('${t}',${i})">Excluir</button>
+                    </div>
+                `;
+            });
+        });
+        renderHistorico();
+    }
+
+    function registrarTreino() {
+        const agora = new Date();
+        const dataFormatada = `${agora.toLocaleDateString()} às ${agora.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+        historico.unshift("✅ Treino realizado em " + dataFormatada); // Adiciona no início
+        salvarHistorico();
+        renderHistorico();
+    }
+
+    function limparHistorico() {
+        if(confirm("Limpar todo o histórico?")) {
+            historico = [];
+            salvarHistorico();
+            renderHistorico();
+        }
+    }
+
+    function renderHistorico() {
+        const div = document.getElementById("historico");
+        div.innerHTML = historico.map(h => `<div class="history-item">${h}</div>`).join('');
+    }
+
+    // Renderização inicial
+    render();
+</script>
+
+</body>
+</html>
